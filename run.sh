@@ -46,24 +46,29 @@ echo -e "${GREEN}✓ Models directory: $PIPER_MODELS_DIR${NC}"
 echo ""
 echo -e "${YELLOW}📦 Checking Piper TTS Models...${NC}"
 
-# Array of essential models to check
-declare -a MODELS=(
-    "en_US-male-medium"
-    "en_US-female-medium"
+# Map of voice IDs to actual Piper speaker models
+declare -A VOICE_MODELS=(
+    ["en-US-male-medium"]="en_US-ryan-medium"
+    ["en-US-female-medium"]="en_US-amy-medium"
 )
 
 MODEL_COUNT=0
 MISSING_MODELS=0
+MISSING_VOICE_MODELS=()
 
-for MODEL in "${MODELS[@]}"; do
-    MODEL_FILE="$PIPER_MODELS_DIR/${MODEL}.onnx"
-    CONFIG_FILE="$PIPER_MODELS_DIR/${MODEL}.onnx.json"
+# Check which models exist
+for VOICE_ID in "${!VOICE_MODELS[@]}"; do
+    MODEL_NAME="${VOICE_MODELS[$VOICE_ID]}"
+    MODEL_FILE="$PIPER_MODELS_DIR/${MODEL_NAME}.onnx"
+    CONFIG_FILE="$PIPER_MODELS_DIR/${MODEL_NAME}.onnx.json"
     
     if [ -f "$MODEL_FILE" ] && [ -f "$CONFIG_FILE" ]; then
-        echo -e "${GREEN}✓${NC} $MODEL"
+        SIZE=$(ls -lh "$MODEL_FILE" | awk '{print $5}')
+        echo -e "${GREEN}✓${NC} $VOICE_ID ($SIZE)"
         ((MODEL_COUNT++))
     else
-        echo -e "${YELLOW}✗${NC} $MODEL (missing)"
+        echo -e "${RED}✗${NC} $VOICE_ID (missing)"
+        MISSING_VOICE_MODELS+=("$VOICE_ID:$MODEL_NAME")
         ((MISSING_MODELS++))
     fi
 done
@@ -71,51 +76,69 @@ done
 # If models are missing, offer to download
 if [ $MISSING_MODELS -gt 0 ]; then
     echo ""
-    echo -e "${YELLOW}⚠️  Missing $MISSING_MODELS model(s)${NC}"
+    echo -e "${YELLOW}⚠️  Missing $MISSING_MODELS voice model(s)${NC}"
     echo ""
-    echo -e "${YELLOW}Would you like to download missing models? (y/n)${NC}"
-    read -r -t 10 -p "Auto-proceeding in 10 seconds... " response || response="y"
+    
+    # Use timeout for 5 seconds (macOS compatible)
+    echo -e "${YELLOW}Download missing models? (y/n) [auto-yes in 5s]${NC}"
+    
+    # Read with 5 second timeout
+    if timeout 5s bash -c 'read -r -p "" response && echo "$response"' > /tmp/response.txt 2>/dev/null; then
+        response=$(cat /tmp/response.txt)
+    else
+        echo "Auto-proceeding (timeout)..."
+        response="y"
+    fi
     
     if [[ "$response" =~ ^[Yy]$ ]] || [ -z "$response" ]; then
         echo ""
         echo -e "${BLUE}Downloading Piper TTS models...${NC}"
         
-        for MODEL in "${MODELS[@]}"; do
-            MODEL_FILE="$PIPER_MODELS_DIR/${MODEL}.onnx"
-            CONFIG_FILE="$PIPER_MODELS_DIR/${MODEL}.onnx.json"
+        for VOICE_MODEL in "${MISSING_VOICE_MODELS[@]}"; do
+            IFS=':' read -r VOICE_ID MODEL_NAME <<< "$VOICE_MODEL"
             
-            if [ ! -f "$MODEL_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
-                echo -e "${YELLOW}Downloading: $MODEL${NC}"
-                
-                # Parse model name to get language/country/gender/quality
-                IFS='_' read -r LANG REGION GENDER QUALITY <<< "$MODEL"
-                REGION_CODE="${REGION:0:2}"
-                
-                # Build HuggingFace URL
-                HF_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
-                HF_URL="${HF_BASE}/${LANG}/${LANG}_${REGION}/${GENDER}/${QUALITY}/${MODEL}"
-                
-                # Download model file
-                echo -e "  ${BLUE}→${NC} Downloading ${MODEL}.onnx..."
-                wget -q -O "$MODEL_FILE" "${HF_URL}.onnx" || {
-                    echo -e "${RED}  ✗ Failed to download ${MODEL}.onnx${NC}"
-                    continue
-                }
-                echo -e "${GREEN}  ✓ Downloaded${NC}"
-                
-                # Download config file
-                echo -e "  ${BLUE}→${NC} Downloading ${MODEL}.onnx.json..."
-                wget -q -O "$CONFIG_FILE" "${HF_URL}.onnx.json" || {
-                    echo -e "${RED}  ✗ Failed to download ${MODEL}.onnx.json${NC}"
-                    continue
-                }
-                echo -e "${GREEN}  ✓ Downloaded${NC}"
+            MODEL_FILE="$PIPER_MODELS_DIR/${MODEL_NAME}.onnx"
+            CONFIG_FILE="$PIPER_MODELS_DIR/${MODEL_NAME}.onnx.json"
+            
+            # Parse model name: en_US-ryan-medium -> en, US, ryan, medium
+            IFS='-' read -r LANG_PREFIX COUNTRY SPEAKER QUALITY <<< "$MODEL_NAME"
+            LANG="${LANG_PREFIX}_${COUNTRY}"
+            
+            # Build HuggingFace URL
+            HF_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
+            HF_URL="${HF_BASE}/en/${LANG}/${SPEAKER}/${QUALITY}/${MODEL_NAME}"
+            
+            echo -e "${YELLOW}Downloading: $VOICE_ID${NC}"
+            
+            # Download model file using curl (macOS compatible)
+            echo -e "  ${BLUE}→${NC} Downloading ${MODEL_NAME}.onnx..."
+            if curl -L -f -o "$MODEL_FILE" "${HF_URL}.onnx" 2>/dev/null; then
+                SIZE=$(ls -lh "$MODEL_FILE" | awk '{print $5}')
+                echo -e "  ${GREEN}✓ Downloaded ($SIZE)${NC}"
+            else
+                echo -e "  ${RED}✗ Failed to download${NC}"
+                rm -f "$MODEL_FILE"
+                continue
+            fi
+            
+            # Download config file
+            echo -e "  ${BLUE}→${NC} Downloading ${MODEL_NAME}.onnx.json..."
+            if curl -L -f -o "$CONFIG_FILE" "${HF_URL}.onnx.json" 2>/dev/null; then
+                echo -e "  ${GREEN}✓ Downloaded${NC}"
+            else
+                echo -e "  ${RED}✗ Failed to download config${NC}"
+                rm -f "$CONFIG_FILE"
+                rm -f "$MODEL_FILE"
+                continue
             fi
         done
         
         echo ""
         MODEL_COUNT=$(ls "$PIPER_MODELS_DIR"/*.onnx 2>/dev/null | wc -l)
-        echo -e "${GREEN}✓ Models ready: $MODEL_COUNT model(s) available${NC}"
+        echo -e "${GREEN}✓ Models ready: $MODEL_COUNT voice model(s) available${NC}"
+    else
+        echo -e "${RED}Download cancelled. Models required to run service.${NC}"
+        exit 1
     fi
 fi
 
