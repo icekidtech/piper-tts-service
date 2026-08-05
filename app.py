@@ -8,12 +8,10 @@ from flask_cors import CORS
 import subprocess
 import os
 import json
-import tempfile
 import uuid
 import logging
 from datetime import datetime
 from pathlib import Path
-import shutil
 
 # Configure logging
 logging.basicConfig(
@@ -28,18 +26,16 @@ CORS(app)
 # Configuration
 MODELS_BASE_DIR = os.getenv('PIPER_MODELS_DIR', '/opt/piper-models')
 OUTPUT_DIR = os.getenv('PIPER_OUTPUT_DIR', '/tmp/piper-audio-output')
-MAX_TEXT_LENGTH = 10000  # Maximum characters allowed for TTS input
-CLEANUP_OLDER_THAN_HOURS = 24
+MAX_TEXT_LENGTH = 10000
 
-# Available voices - can be expanded easily
-# Format: "language_country-gender-quality": "model_name"
+# Available voices - easily expandable
 AVAILABLE_VOICES = {
     # English - US
     "en-US-male-medium": "en_US-male-medium",
     "en-US-male-high": "en_US-male-high",
+    "en-US-male-low": "en_US-male-low",
     "en-US-female-medium": "en_US-female-medium",
     "en-US-female-high": "en_US-female-high",
-    "en-US-male-low": "en_US-male-low",
     "en-US-female-low": "en_US-female-low",
     
     # English - UK
@@ -81,7 +77,6 @@ AVAILABLE_VOICES = {
     "pl-PL-female-medium": "pl_PL-female-medium",
 }
 
-# Default voice if not specified
 DEFAULT_VOICE = "en-US-male-medium"
 
 # Ensure output directory exists
@@ -94,15 +89,7 @@ logger.info(f"Available voices: {len(AVAILABLE_VOICES)}")
 
 
 def get_model_paths(voice_id):
-    """
-    Get model and config file paths for a given voice ID
-    
-    Args:
-        voice_id: Voice identifier (e.g., "en-US-male-medium")
-    
-    Returns:
-        Tuple of (model_path, config_path) or (None, None) if not found
-    """
+    """Get model and config file paths for a given voice ID"""
     if voice_id not in AVAILABLE_VOICES:
         logger.warning(f"Unknown voice: {voice_id}")
         return None, None
@@ -116,14 +103,10 @@ def get_model_paths(voice_id):
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
+    """Health check endpoint - shows available voices"""
     try:
-        # Check if models directory exists
-        models_dir_exists = os.path.exists(MODELS_BASE_DIR)
-        
-        # Count available model files
         available_models = []
-        if models_dir_exists:
+        if os.path.exists(MODELS_BASE_DIR):
             for voice_id, model_name in AVAILABLE_VOICES.items():
                 model_path = os.path.join(MODELS_BASE_DIR, f"{model_name}.onnx")
                 config_path = os.path.join(MODELS_BASE_DIR, f"{model_name}.onnx.json")
@@ -146,40 +129,73 @@ def health_check():
     
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
+        return jsonify({"status": "unhealthy", "error": str(e)}), 503
+
+
+@app.route('/api/voices', methods=['GET'])
+def list_voices():
+    """List all available voices and their status"""
+    try:
+        voices_info = {}
+        available_count = 0
+        
+        for voice_id, model_name in AVAILABLE_VOICES.items():
+            model_path = os.path.join(MODELS_BASE_DIR, f"{model_name}.onnx")
+            config_path = os.path.join(MODELS_BASE_DIR, f"{model_name}.onnx.json")
+            is_available = os.path.exists(model_path) and os.path.exists(config_path)
+            
+            if is_available:
+                available_count += 1
+            
+            # Parse voice_id
+            parts = voice_id.split('-')
+            language_map = {
+                'en': 'English',
+                'es': 'Spanish',
+                'fr': 'French',
+                'de': 'German',
+                'it': 'Italian',
+                'pt': 'Portuguese',
+                'nl': 'Dutch',
+                'ru': 'Russian',
+                'pl': 'Polish'
+            }
+            
+            lang_code = parts[0]
+            country = parts[1] if len(parts) > 1 else ''
+            gender = parts[2] if len(parts) > 2 else 'unknown'
+            quality = parts[3] if len(parts) > 3 else 'unknown'
+            language_name = f"{language_map.get(lang_code, 'Unknown')} ({country})" if country else language_map.get(lang_code, 'Unknown')
+            
+            voices_info[voice_id] = {
+                "available": is_available,
+                "language": language_name,
+                "gender": gender,
+                "quality": quality,
+                "model_name": model_name
+            }
+        
         return jsonify({
-            "status": "unhealthy",
-            "error": str(e)
-        }), 503
+            "available_voices": voices_info,
+            "default_voice": DEFAULT_VOICE,
+            "total_configured": len(AVAILABLE_VOICES),
+            "total_available": available_count,
+            "timestamp": datetime.now().isoformat()
+        }), 200
+    
+    except Exception as e:
+        logger.error(f"Error listing voices: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/tts/generate', methods=['POST'])
 def generate_tts():
-    """
-    Generate TTS audio
-    
-    Expected JSON:
-    {
-      "text": "Hello world",
-      "voice": "en-US-male-medium"
-    }
-    
-    Returns:
-    {
-      "audio_id": "uuid",
-      "duration": 3,
-      "file_size": 9600,
-      "file_path": "/tmp/piper-audio-output/uuid_ulaw.wav",
-      "local_url": "http://localhost:5000/api/audio/uuid",
-      "voice": "en-US-male-medium",
-      "status": "ready"
-    }
-    """
+    """Generate TTS audio from text"""
     try:
         data = request.json or {}
         
         # Validate request
         if not data or 'text' not in data:
-            logger.warning("TTS request missing 'text' field")
             return jsonify({"error": "text field is required"}), 400
         
         text = data.get('text', '').strip()
@@ -195,11 +211,9 @@ def generate_tts():
         
         # Validate text
         if not text:
-            logger.warning("TTS request with empty text")
             return jsonify({"error": "text cannot be empty"}), 400
         
         if len(text) > MAX_TEXT_LENGTH:
-            logger.warning(f"TTS text exceeds {MAX_TEXT_LENGTH} chars: {len(text)}")
             return jsonify({
                 "error": f"text exceeds {MAX_TEXT_LENGTH} characters",
                 "length": len(text),
@@ -220,9 +234,7 @@ def generate_tts():
         # Get model paths
         model_path, config_path = get_model_paths(voice)
         if not model_path or not config_path:
-            return jsonify({
-                "error": f"Model paths not found for voice: {voice}"
-            }), 500
+            return jsonify({"error": f"Model paths not found for voice: {voice}"}), 500
         
         # Check if model files exist
         if not os.path.exists(model_path) or not os.path.exists(config_path):
@@ -280,7 +292,6 @@ def generate_tts():
             logger.error(f"[{audio_id}] Piper timeout")
             process.kill()
             return jsonify({"error": "TTS generation timeout"}), 504
-        
         except Exception as e:
             logger.error(f"[{audio_id}] Piper execution error: {str(e)}")
             return jsonify({"error": f"Piper error: {str(e)}"}), 500
@@ -288,12 +299,11 @@ def generate_tts():
         # Step 2: Convert to ULAW 8kHz (Twilio compatible)
         logger.info(f"[{audio_id}] Converting to ULAW 8kHz...")
         ffmpeg_cmd = [
-            'ffmpeg',
-            '-i', output_wav,
+            'ffmpeg', '-i', output_wav,
             '-codec:a', 'pcm_mulaw',
             '-ar', '8000',
             '-ac', '1',
-            '-y',  # Overwrite output file
+            '-y',
             output_ulaw
         ]
         
@@ -309,7 +319,6 @@ def generate_tts():
             if process.returncode != 0:
                 error_msg = stderr.decode('utf-8', errors='ignore')
                 logger.error(f"[{audio_id}] FFmpeg conversion failed: {error_msg}")
-                # Try to return original WAV if conversion fails
                 if os.path.exists(output_wav):
                     output_ulaw = output_wav
                 else:
@@ -326,82 +335,9 @@ def generate_tts():
             logger.info(f"[{audio_id}] ULAW generated: {ulaw_size} bytes")
         
         except subprocess.TimeoutExpired:
-            
-@app.route('/api/voices', methods=['GET'])
-def list_voices():
-    """
-    List all available voices
-    
-    Returns:
-    {
-      "available_voices": {
-        "en-US-male-medium": {
-          "available": true,
-          "language": "English (US)",
-          "gender": "male",
-          "quality": "medium"
-        },
-        ...
-      },
-      "default_voice": "en-US-male-medium",
-      "total_configured": 30,
-      "total_available": 5
-    }
-    """
-    try:
-        voices_info = {}
-        available_count = 0
-        
-        for voice_id, model_name in AVAILABLE_VOICES.items():
-            model_path = os.path.join(MODELS_BASE_DIR, f"{model_name}.onnx")
-            config_path = os.path.join(MODELS_BASE_DIR, f"{model_name}.onnx.json")
-            is_available = os.path.exists(model_path) and os.path.exists(config_path)
-            
-            if is_available:
-                available_count += 1
-            
-            # Parse voice_id: "en-US-male-medium"
-            parts = voice_id.split('-')
-            language_map = {
-                'en': 'English',
-                'es': 'Spanish',
-                'fr': 'French',
-                'de': 'German',
-                'it': 'Italian',
-                'pt': 'Portuguese',
-                'nl': 'Dutch',
-                'ru': 'Russian',
-                'pl': 'Polish'
-            }
-            lang_code = parts[0]
-            country = parts[1] if len(parts) > 1 else ''
-            gender = parts[2] if len(parts) > 2 else 'unknown'
-            quality = parts[3] if len(parts) > 3 else 'unknown'
-            
-            language_name = f"{language_map.get(lang_code, 'Unknown')} ({country})" if country else language_map.get(lang_code, 'Unknown')
-            
-            voices_info[voice_id] = {
-                "available": is_available,
-                "language": language_name,
-                "gender": gender,
-                "quality": quality,
-                "model_name": model_name
-            }
-        
-        return jsonify({
-            "available_voices": voices_info,
-            "default_voice": DEFAULT_VOICE,
-            "total_configured": len(AVAILABLE_VOICES),
-            "total_available": available_count,
-            "timestamp": datetime.now().isoformat()
-        }), 200
-    
-    except Exception as e:
-        logger.error(f"Error listing voices: {str(e)}")
-        return jsonify({"error": str(e)}), 500ut")
+            logger.error(f"[{audio_id}] FFmpeg timeout")
             process.kill()
             return jsonify({"error": "Audio conversion timeout"}), 504
-        
         except Exception as e:
             logger.error(f"[{audio_id}] FFmpeg error: {str(e)}")
             if os.path.exists(output_wav):
@@ -436,144 +372,20 @@ def list_voices():
     except Exception as e:
         logger.error(f"Unexpected error in generate_tts: {str(e)}")
         return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
-        
-        try:
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            
-            stdout, stderr = process.communicate(
-                input=text.encode('utf-8'),
-                timeout=30
-            )
-            
-            if process.returncode != 0:
-                error_msg = stderr.decode('utf-8', errors='ignore')
-                logger.error(f"[{audio_id}] Piper generation failed: {error_msg}")
-                return jsonify({
-                    "error": "TTS generation failed",
-                    "details": error_msg
-                }), 500
-            
-            if not os.path.exists(output_wav):
-                logger.error(f"[{audio_id}] WAV file not created after Piper")
-                return jsonify({"error": "WAV file not generated"}), 500
-            
-            wav_size = os.path.getsize(output_wav)
-            logger.info(f"[{audio_id}] WAV generated: {wav_size} bytes")
-        
-        except subprocess.TimeoutExpired:
-            logger.error(f"[{audio_id}] Piper timeout")
-            process.kill()
-            return jsonify({"error": "TTS generation timeout"}), 504
-        
-        except Exception as e:
-            logger.error(f"[{audio_id}] Piper execution error: {str(e)}")
-            return jsonify({"error": f"Piper error: {str(e)}"}), 500
-        
-        # Step 2: Convert to ULAW 8kHz (Twilio compatible)
-        logger.info(f"[{audio_id}] Converting to ULAW 8kHz...")
-        ffmpeg_cmd = [
-            'ffmpeg',
-            '-i', output_wav,
-            '-codec:a', 'pcm_mulaw',
-            '-ar', '8000',
-            '-ac', '1',
-            '-y',  # Overwrite output file
-            output_ulaw
-        ]
-        
-        try:
-            process = subprocess.Popen(
-                ffmpeg_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            
-            stdout, stderr = process.communicate(timeout=30)
-            
-            if process.returncode != 0:
-                error_msg = stderr.decode('utf-8', errors='ignore')
-                logger.error(f"[{audio_id}] FFmpeg conversion failed: {error_msg}")
-                # Try to return original WAV if conversion fails
-                if os.path.exists(output_wav):
-                    output_ulaw = output_wav
-                else:
-                    return jsonify({
-                        "error": "Audio conversion failed",
-                        "details": error_msg
-                    }), 500
-            
-            if not os.path.exists(output_ulaw):
-                logger.error(f"[{audio_id}] ULAW file not created")
-                return jsonify({"error": "ULAW conversion failed"}), 500
-            
-            ulaw_size = os.path.getsize(output_ulaw)
-            logger.info(f"[{audio_id}] ULAW generated: {ulaw_size} bytes")
-        
-        except subprocess.TimeoutExpired:
-            logger.error(f"[{audio_id}] FFmpeg timeout")
-            process.kill()
-            return jsonify({"error": "Audio conversion timeout"}), 504
-        
-        except Exception as e:
-            logger.error(f"[{audio_id}] FFmpeg error: {str(e)}")
-            if os.path.exists(output_wav):
-                output_ulaw = output_wav
-            else:
-                return jsonify({"error": f"Conversion error: {str(e)}"}), 500
-        
-        # Calculate duration
-        file_size = os.path.getsize(output_ulaw)
-        duration = file_size / (8000 * 1)  # 8kHz mono, 1 byte per sample (ULAW)
-        
-        # Clean up original WAV
-        if os.path.exists(output_wav) and output_wav != output_ulaw:
-            try:
-                os.remove(output_wav)
-            except:
-                pass
-        
-        logger.info(f"[{audio_id}] TTS Complete: duration={duration:.2f}s, size={file_size} bytes")
-        
-        return jsonify({
-            "audio_id": audio_id,
-            "duration": int(duration),
-            "file_size": file_size,
-            "file_path": output_ulaw,
-            "local_url": f"http://localhost:5000/api/audio/{audio_id}",
-            "status": "ready",
-            "generated_at": datetime.now().isoformat()
-        }), 200
-    
-    except Exception as e:
-        logger.error(f"Unexpected error in generate_tts: {str(e)}")
-        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
 
 
 @app.route('/api/audio/<audio_id>', methods=['GET'])
 def get_audio(audio_id):
-    """
-    Download generated audio file
-    
-    Returns the ULAW WAV file
-    """
+    """Download generated audio file"""
     try:
-        # Validate audio_id to prevent directory traversal
         if not uuid.UUID(audio_id):
-            logger.warning(f"Invalid audio_id format: {audio_id}")
             return jsonify({"error": "Invalid audio_id"}), 400
     except (ValueError, AttributeError):
-        logger.warning(f"Invalid audio_id: {audio_id}")
         return jsonify({"error": "Invalid audio_id"}), 400
     
     try:
         file_path = os.path.join(OUTPUT_DIR, f"{audio_id}_ulaw.wav")
         
-        # Check if file exists
         if not os.path.exists(file_path):
             logger.warning(f"Audio file not found: {file_path}")
             return jsonify({"error": "Audio file not found"}), 404
@@ -593,11 +405,8 @@ def get_audio(audio_id):
 
 @app.route('/api/audio/<audio_id>/delete', methods=['DELETE'])
 def delete_audio(audio_id):
-    """
-    Delete an audio file
-    """
+    """Delete an audio file"""
     try:
-        # Validate audio_id
         if not uuid.UUID(audio_id):
             return jsonify({"error": "Invalid audio_id"}), 400
     except (ValueError, AttributeError):
@@ -620,9 +429,7 @@ def delete_audio(audio_id):
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
-    """
-    Get service statistics
-    """
+    """Get service statistics"""
     try:
         audio_files = os.listdir(OUTPUT_DIR)
         total_files = len(audio_files)
@@ -658,6 +465,7 @@ if __name__ == '__main__':
     logger.info("Starting Piper TTS Flask service...")
     logger.info("Available endpoints:")
     logger.info("  GET  /health - Health check")
+    logger.info("  GET  /api/voices - List voices")
     logger.info("  POST /api/tts/generate - Generate TTS audio")
     logger.info("  GET  /api/audio/<id> - Download audio")
     logger.info("  GET  /api/stats - Service statistics")
