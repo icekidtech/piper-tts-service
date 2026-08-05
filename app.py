@@ -26,55 +26,19 @@ CORS(app)
 # Configuration
 MODELS_BASE_DIR = os.getenv('PIPER_MODELS_DIR', '/opt/piper-models')
 OUTPUT_DIR = os.getenv('PIPER_OUTPUT_DIR', '/tmp/piper-audio-output')
-MAX_TEXT_LENGTH = 10000
+MAX_TEXT_LENGTH = 10000 # Maximum characters allowed in input text
 
-# Available voices - easily expandable
+# Available voices - maps frontend voice IDs to Piper model names
+# Format: "en-US-male-medium" -> "en_US-ryan-medium" (Ryan = male voice)
 AVAILABLE_VOICES = {
-    # English - US
-    "en-US-male-medium": "en_US-male-medium",
-    "en-US-male-high": "en_US-male-high",
-    "en-US-male-low": "en_US-male-low",
-    "en-US-female-medium": "en_US-female-medium",
-    "en-US-female-high": "en_US-female-high",
-    "en-US-female-low": "en_US-female-low",
+    # English - US (Based on actual Piper speaker models)
+    "en-US-male-medium": "en_US-ryan-medium",      # Male speaker (Ryan)
+    "en-US-female-medium": "en_US-amy-medium",      # Female speaker (Amy)
     
-    # English - UK
-    "en-GB-male-medium": "en_GB-male-medium",
-    "en-GB-female-medium": "en_GB-female-medium",
-    
-    # Spanish
-    "es-ES-male-medium": "es_ES-male-medium",
-    "es-ES-female-medium": "es_ES-female-medium",
-    "es-MX-male-medium": "es_MX-male-medium",
-    
-    # French
-    "fr-FR-male-medium": "fr_FR-male-medium",
-    "fr-FR-female-medium": "fr_FR-female-medium",
-    
-    # German
-    "de-DE-male-medium": "de_DE-male-medium",
-    "de-DE-female-medium": "de_DE-female-medium",
-    
-    # Italian
-    "it-IT-male-medium": "it_IT-male-medium",
-    "it-IT-female-medium": "it_IT-female-medium",
-    
-    # Portuguese
-    "pt-BR-male-medium": "pt_BR-male-medium",
-    "pt-BR-female-medium": "pt_BR-female-medium",
-    "pt-PT-male-medium": "pt_PT-male-medium",
-    
-    # Dutch
-    "nl-NL-male-medium": "nl_NL-male-medium",
-    "nl-NL-female-medium": "nl_NL-female-medium",
-    
-    # Russian
-    "ru-RU-male-medium": "ru_RU-male-medium",
-    "ru-RU-female-medium": "ru_RU-female-medium",
-    
-    # Polish
-    "pl-PL-male-medium": "pl_PL-male-medium",
-    "pl-PL-female-medium": "pl_PL-female-medium",
+    # Add more voices as models are downloaded
+    # Male voices: Ryan, Lessac, Kusal
+    # Female voices: Amy, Kathleen, Kristin
+    # Multispeaker: LibriTTS (904 speakers)
 }
 
 DEFAULT_VOICE = "en-US-male-medium"
