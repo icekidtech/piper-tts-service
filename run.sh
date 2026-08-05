@@ -46,30 +46,28 @@ echo -e "${GREEN}✓ Models directory: $PIPER_MODELS_DIR${NC}"
 echo ""
 echo -e "${YELLOW}📦 Checking Piper TTS Models...${NC}"
 
-# Map of voice IDs to actual Piper speaker models
-declare -A VOICE_MODELS=(
-    ["en-US-male-medium"]="en_US-ryan-medium"
-    ["en-US-female-medium"]="en_US-amy-medium"
-)
+# Voice models to check (VOICE_ID MODEL_NAME pairs)
+VOICE_CONFIGS="en-US-male-medium:en_US-ryan-medium en-US-female-medium:en_US-amy-medium"
 
 MODEL_COUNT=0
 MISSING_MODELS=0
-MISSING_VOICE_MODELS=()
+MISSING_VOICE_MODELS=""
 
 # Check which models exist
-for VOICE_ID in "${!VOICE_MODELS[@]}"; do
-    MODEL_NAME="${VOICE_MODELS[$VOICE_ID]}"
+for VOICE_CONFIG in $VOICE_CONFIGS; do
+    VOICE_ID="${VOICE_CONFIG%:*}"
+    MODEL_NAME="${VOICE_CONFIG#*:}"
     MODEL_FILE="$PIPER_MODELS_DIR/${MODEL_NAME}.onnx"
     CONFIG_FILE="$PIPER_MODELS_DIR/${MODEL_NAME}.onnx.json"
     
     if [ -f "$MODEL_FILE" ] && [ -f "$CONFIG_FILE" ]; then
         SIZE=$(ls -lh "$MODEL_FILE" | awk '{print $5}')
         echo -e "${GREEN}✓${NC} $VOICE_ID ($SIZE)"
-        ((MODEL_COUNT++))
+        MODEL_COUNT=$((MODEL_COUNT + 1))
     else
         echo -e "${RED}✗${NC} $VOICE_ID (missing)"
-        MISSING_VOICE_MODELS+=("$VOICE_ID:$MODEL_NAME")
-        ((MISSING_MODELS++))
+        MISSING_VOICE_MODELS="$MISSING_VOICE_MODELS $VOICE_CONFIG"
+        MISSING_MODELS=$((MISSING_MODELS + 1))
     fi
 done
 
@@ -83,30 +81,32 @@ if [ $MISSING_MODELS -gt 0 ]; then
     echo -e "${YELLOW}Download missing models? (y/n) [auto-yes in 5s]${NC}"
     
     # Read with 5 second timeout
-    if timeout 5s bash -c 'read -r -p "" response && echo "$response"' > /tmp/response.txt 2>/dev/null; then
-        response=$(cat /tmp/response.txt)
-    else
-        echo "Auto-proceeding (timeout)..."
-        response="y"
+    response="y"
+    timeout 5s bash -c 'read -r response; echo "$response"' > /tmp/response.txt 2>/dev/null || response="y"
+    
+    if [ -f /tmp/response.txt ]; then
+        response=$(cat /tmp/response.txt | tr -d '\n')
     fi
     
-    if [[ "$response" =~ ^[Yy]$ ]] || [ -z "$response" ]; then
+    if [ "$response" = "y" ] || [ "$response" = "Y" ] || [ -z "$response" ]; then
         echo ""
         echo -e "${BLUE}Downloading Piper TTS models...${NC}"
         
-        for VOICE_MODEL in "${MISSING_VOICE_MODELS[@]}"; do
-            IFS=':' read -r VOICE_ID MODEL_NAME <<< "$VOICE_MODEL"
+        for VOICE_CONFIG in $MISSING_VOICE_MODELS; do
+            VOICE_ID="${VOICE_CONFIG%:*}"
+            MODEL_NAME="${VOICE_CONFIG#*:}"
             
             MODEL_FILE="$PIPER_MODELS_DIR/${MODEL_NAME}.onnx"
             CONFIG_FILE="$PIPER_MODELS_DIR/${MODEL_NAME}.onnx.json"
             
-            # Parse model name: en_US-ryan-medium -> en, US, ryan, medium
-            IFS='-' read -r LANG_PREFIX COUNTRY SPEAKER QUALITY <<< "$MODEL_NAME"
-            LANG="${LANG_PREFIX}_${COUNTRY}"
+            # Parse model name: en_US-ryan-medium -> en_US, ryan, medium
+            LANG_COUNTRY=$(echo "$MODEL_NAME" | cut -d'-' -f1-2)
+            SPEAKER=$(echo "$MODEL_NAME" | cut -d'-' -f3)
+            QUALITY=$(echo "$MODEL_NAME" | cut -d'-' -f4)
             
             # Build HuggingFace URL
             HF_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
-            HF_URL="${HF_BASE}/en/${LANG}/${SPEAKER}/${QUALITY}/${MODEL_NAME}"
+            HF_URL="${HF_BASE}/en/${LANG_COUNTRY}/${SPEAKER}/${QUALITY}/${MODEL_NAME}"
             
             echo -e "${YELLOW}Downloading: $VOICE_ID${NC}"
             
