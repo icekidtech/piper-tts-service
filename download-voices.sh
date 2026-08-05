@@ -39,19 +39,20 @@ download_model() {
     
     echo -e "${YELLOW}Downloading: $MODEL_NAME${NC}"
     
-    # Download model
+    # Download model (with progress bar)
     echo -e "  ${BLUE}→${NC} .onnx file..."
-    if wget -q -O "$MODEL_FILE" "https://huggingface.co/rhasspy/piper-voices/resolve/main/${HF_PATH}/${MODEL_NAME}.onnx"; then
-        echo -e "    ${GREEN}✓${NC} Done"
+    if wget --show-progress -O "$MODEL_FILE" "https://huggingface.co/rhasspy/piper-voices/resolve/main/${HF_PATH}/${MODEL_NAME}.onnx" 2>&1; then
+        SIZE=$(ls -lh "$MODEL_FILE" | awk '{print $5}')
+        echo -e "    ${GREEN}✓${NC} Done ($SIZE)"
     else
         echo -e "    ${RED}✗${NC} Failed"
         rm -f "$MODEL_FILE"
         return 1
     fi
     
-    # Download config
+    # Download config (with progress bar)
     echo -e "  ${BLUE}→${NC} .onnx.json file..."
-    if wget -q -O "$CONFIG_FILE" "https://huggingface.co/rhasspy/piper-voices/resolve/main/${HF_PATH}/${MODEL_NAME}.onnx.json"; then
+    if wget --show-progress -O "$CONFIG_FILE" "https://huggingface.co/rhasspy/piper-voices/resolve/main/${HF_PATH}/${MODEL_NAME}.onnx.json" 2>&1; then
         echo -e "    ${GREEN}✓${NC} Done"
     else
         echo -e "    ${RED}✗${NC} Failed"
@@ -155,19 +156,21 @@ case $choice in
         
         for key in "${SORTED_KEYS[@]}"; do
             ((CURRENT++))
-            echo -e "${BLUE}[$CURRENT/$TOTAL]${NC} Downloading: $key"
+            PERCENT=$((CURRENT * 100 / TOTAL))
+            echo -e "${BLUE}[$PERCENT%]${NC} [$CURRENT/$TOTAL] Downloading: $key"
             IFS=':' read -r MODEL_NAME HF_PATH <<< "${VOICES[$key]}"
             
             if ! download_model "$MODEL_NAME" "$HF_PATH"; then
                 ((FAILED++))
             fi
+            echo ""
         done
         
         echo ""
         if [ $FAILED -eq 0 ]; then
-            echo -e "${GREEN}All voices downloaded successfully!${NC}"
+            echo -e "${GREEN}✓ All voices downloaded successfully!${NC}"
         else
-            echo -e "${YELLOW}Downloaded with $FAILED failures${NC}"
+            echo -e "${YELLOW}⚠ Downloaded with $FAILED failures${NC}"
         fi
         ;;
     q)
