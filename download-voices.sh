@@ -145,12 +145,30 @@ case $choice in
         ;;
     b)
         echo ""
-        echo -e "${YELLOW}Downloading all voices...${NC}"
+        echo -e "${YELLOW}Downloading all voices (this will take 10-15 minutes)...${NC}"
+        echo -e "${YELLOW}Total size: ~2.5GB${NC}"
         echo ""
+        
+        TOTAL=${#SORTED_KEYS[@]}
+        CURRENT=0
+        FAILED=0
+        
         for key in "${SORTED_KEYS[@]}"; do
+            ((CURRENT++))
+            echo -e "${BLUE}[$CURRENT/$TOTAL]${NC} Downloading: $key"
             IFS=':' read -r MODEL_NAME HF_PATH <<< "${VOICES[$key]}"
-            download_model "$MODEL_NAME" "$HF_PATH"
+            
+            if ! download_model "$MODEL_NAME" "$HF_PATH"; then
+                ((FAILED++))
+            fi
         done
+        
+        echo ""
+        if [ $FAILED -eq 0 ]; then
+            echo -e "${GREEN}All voices downloaded successfully!${NC}"
+        else
+            echo -e "${YELLOW}Downloaded with $FAILED failures${NC}"
+        fi
         ;;
     q)
         echo "Exiting..."
