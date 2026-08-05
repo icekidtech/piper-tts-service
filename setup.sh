@@ -13,15 +13,26 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Check Python 3.9
-echo -e "${YELLOW}Checking Python 3.9...${NC}"
-if ! command -v python3.9 &> /dev/null; then
-    echo -e "${RED}Error: Python 3.9 not found${NC}"
-    echo "Please install Python 3.9 first"
+# Check Python 3.9+
+echo -e "${YELLOW}Checking Python 3.9+...${NC}"
+PYTHON_CMD=""
+if command -v python3.9 &> /dev/null; then
+    PYTHON_CMD="python3.9"
+elif command -v python3 &> /dev/null; then
+    # Check if it's 3.9+
+    PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+    if [[ "$PYTHON_VERSION" == 3.9* ]] || [[ "$PYTHON_VERSION" == 3.1[0-9]* ]]; then
+        PYTHON_CMD="python3"
+    fi
+fi
+
+if [ -z "$PYTHON_CMD" ]; then
+    echo -e "${RED}Error: Python 3.9+ not found${NC}"
+    echo "Please install Python 3.9 or later first"
     exit 1
 fi
 
-PYTHON_VERSION=$(python3.9 --version)
+PYTHON_VERSION=$($PYTHON_CMD --version)
 echo -e "${GREEN}✓ Found: $PYTHON_VERSION${NC}"
 
 # Check ffmpeg
@@ -38,7 +49,7 @@ echo -e "${GREEN}✓ Found: $FFMPEG_VERSION${NC}"
 
 # Create virtual environment
 echo -e "${YELLOW}Creating virtual environment...${NC}"
-python3.9 -m venv venv
+$PYTHON_CMD -m venv venv
 source venv/bin/activate
 
 echo -e "${GREEN}✓ Virtual environment created${NC}"
