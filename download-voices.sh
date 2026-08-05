@@ -61,53 +61,49 @@ download_model() {
     fi
 }
 
-# Available voices
+# Available voices (speaker-based, not gender/quality based)
 declare -A VOICES=(
-    # English US
-    ["en-US Male Medium"]="en_US-male-medium:en/en_US/male/medium"
-    ["en-US Male High"]="en_US-male-high:en/en_US/male/high"
-    ["en-US Male Low"]="en_US-male-low:en/en_US/male/low"
-    ["en-US Female Medium"]="en_US-female-medium:en/en_US/female/medium"
-    ["en-US Female High"]="en_US-female-high:en/en_US/female/high"
-    ["en-US Female Low"]="en_US-female-low:en/en_US/female/low"
+    # English US (Speakers: ryan=male, amy=female, etc.)
+    ["en-US Ryan (Male, Medium)"]="en_US-ryan-medium:en/en_US/ryan/medium"
+    ["en-US Amy (Female, Medium)"]="en_US-amy-medium:en/en_US/amy/medium"
+    ["en-US Danny (Male, Medium)"]="en_US-danny-medium:en/en_US/danny/medium"
+    ["en-US Kathleen (Female, Medium)"]="en_US-kathleen-medium:en/en_US/kathleen/medium"
+    ["en-US Kristin (Female, Medium)"]="en_US-kristin-medium:en/en_US/kristin/medium"
+    ["en-US Kusal (Male, Medium)"]="en_US-kusal-medium:en/en_US/kusal/medium"
+    ["en-US Joe (Male, Medium)"]="en_US-joe-medium:en/en_US/joe/medium"
+    ["en-US Lessac (Male, Medium)"]="en_US-lessac-medium:en/en_US/lessac/medium"
     
-    # English UK
-    ["en-GB Male Medium"]="en_GB-male-medium:en/en_GB/male/medium"
-    ["en-GB Female Medium"]="en_GB-female-medium:en/en_GB/female/medium"
+    # English GB
+    ["en-GB Alan (Male, Medium)"]="en_GB-alan-medium:en/en_GB/alan/medium"
+    ["en-GB Jon (Male, Medium)"]="en_GB-jon-medium:en/en_GB/jon/medium"
     
     # Spanish
-    ["Spanish (Spain) Male"]="es_ES-male-medium:es/es_ES/male/medium"
-    ["Spanish (Spain) Female"]="es_ES-female-medium:es/es_ES/female/medium"
-    ["Spanish (Mexico) Male"]="es_MX-male-medium:es/es_MX/male/medium"
+    ["es-ES Alberto (Male, Medium)"]="es_ES-alberto-medium:es/es_ES/alberto/medium"
+    ["es-ES Carla (Female, Medium)"]="es_ES-carla-medium:es/es_ES/carla/medium"
+    ["es-MX Juan (Male, Medium)"]="es_MX-juan-medium:es/es_MX/juan/medium"
     
     # French
-    ["French Male"]="fr_FR-male-medium:fr/fr_FR/male/medium"
-    ["French Female"]="fr_FR-female-medium:fr/fr_FR/female/medium"
+    ["fr-FR Siwis (Female, Medium)"]="fr_FR-siwis-medium:fr/fr_FR/siwis/medium"
     
     # German
-    ["German Male"]="de_DE-male-medium:de/de_DE/male/medium"
-    ["German Female"]="de_DE-female-medium:de/de_DE/female/medium"
+    ["de-DE Thorsten (Male, Medium)"]="de_DE-thorsten-medium:de/de_DE/thorsten/medium"
     
     # Italian
-    ["Italian Male"]="it_IT-male-medium:it/it_IT/male/medium"
-    ["Italian Female"]="it_IT-female-medium:it/it_IT/female/medium"
+    ["it-IT Riccardo (Male, Medium)"]="it_IT-riccardo-medium:it/it_IT/riccardo/medium"
     
     # Portuguese
-    ["Portuguese (Brazil) Male"]="pt_BR-male-medium:pt/pt_BR/male/medium"
-    ["Portuguese (Brazil) Female"]="pt_BR-female-medium:pt/pt_BR/female/medium"
-    ["Portuguese (Portugal) Male"]="pt_PT-male-medium:pt/pt_PT/male/medium"
+    ["pt-BR Antonio (Male, Medium)"]="pt_BR-antonio-medium:pt/pt_BR/antonio/medium"
+    ["pt-PT Mariana (Female, Medium)"]="pt_PT-mariana-medium:pt/pt_PT/mariana/medium"
     
     # Dutch
-    ["Dutch Male"]="nl_NL-male-medium:nl/nl_NL/male/medium"
-    ["Dutch Female"]="nl_NL-female-medium:nl/nl_NL/female/medium"
+    ["nl-NL Frank (Male, Medium)"]="nl_NL-frank-medium:nl/nl_NL/frank/medium"
+    ["nl-NL Flemish (Female, Medium)"]="nl_NL-flemish-medium:nl/nl_NL/flemish/medium"
     
     # Russian
-    ["Russian Male"]="ru_RU-male-medium:ru/ru_RU/male/medium"
-    ["Russian Female"]="ru_RU-female-medium:ru/ru_RU/female/medium"
+    ["ru-RU Dmitri (Male, Medium)"]="ru_RU-dmitri-medium:ru/ru_RU/dmitri/medium"
     
     # Polish
-    ["Polish Male"]="pl_PL-male-medium:pl/pl_PL/male/medium"
-    ["Polish Female"]="pl_PL-female-medium:pl/pl_PL/female/medium"
+    ["pl-PL Zuzanna (Female, Medium)"]="pl_PL-zuzanna-medium:pl/pl_PL/zuzanna/medium"
 )
 
 # Display options
@@ -141,8 +137,8 @@ case $choice in
         echo ""
         echo -e "${YELLOW}Downloading recommended voices...${NC}"
         echo ""
-        download_model "en_US-male-medium" "en/en_US/male/medium"
-        download_model "en_US-female-medium" "en/en_US/female/medium"
+        download_model "en_US-ryan-medium" "en/en_US/ryan/medium"
+        download_model "en_US-amy-medium" "en/en_US/amy/medium"
         ;;
     b)
         echo ""
