@@ -1,0 +1,24 @@
+[Unit]
+Description=Piper TTS Microservice
+Documentation=https://github.com/rhasspy/piper
+After=network.target
+
+[Service]
+Type=simple
+User=piper
+Group=piper
+WorkingDirectory=/opt/piper-service
+Environment="PATH=/opt/piper-service/venv/bin"
+Environment="PIPER_MODEL_PATH=/opt/piper-models/en_US-male-medium.onnx"
+Environment="PIPER_CONFIG_PATH=/opt/piper-models/en_US-male-medium.onnx.json"
+Environment="PIPER_OUTPUT_DIR=/var/lib/piper/audio-output"
+Environment="FLASK_ENV=production"
+ExecStart=/opt/piper-service/venv/bin/python app.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=piper-tts
+
+[Install]
+WantedBy=multi-user.target
