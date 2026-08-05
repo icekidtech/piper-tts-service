@@ -3,7 +3,7 @@
 # Download Piper TTS voice models
 # This script allows you to download specific voice models
 
-set -e
+set -o pipefail
 
 # Colors
 GREEN='\033[0;32m'
@@ -42,8 +42,13 @@ download_model() {
     # Download model (with progress bar)
     echo -e "  ${BLUE}→${NC} .onnx file..."
     if wget --show-progress -O "$MODEL_FILE" "https://huggingface.co/rhasspy/piper-voices/resolve/main/${HF_PATH}/${MODEL_NAME}.onnx" 2>&1; then
-        SIZE=$(ls -lh "$MODEL_FILE" | awk '{print $5}')
-        echo -e "    ${GREEN}✓${NC} Done ($SIZE)"
+        if [ -f "$MODEL_FILE" ]; then
+            SIZE=$(ls -lh "$MODEL_FILE" | awk '{print $5}')
+            echo -e "    ${GREEN}✓${NC} Done ($SIZE)"
+        else
+            echo -e "    ${RED}✗${NC} Failed to save file"
+            return 1
+        fi
     else
         echo -e "    ${RED}✗${NC} Failed"
         rm -f "$MODEL_FILE"
@@ -53,7 +58,13 @@ download_model() {
     # Download config (with progress bar)
     echo -e "  ${BLUE}→${NC} .onnx.json file..."
     if wget --show-progress -O "$CONFIG_FILE" "https://huggingface.co/rhasspy/piper-voices/resolve/main/${HF_PATH}/${MODEL_NAME}.onnx.json" 2>&1; then
-        echo -e "    ${GREEN}✓${NC} Done"
+        if [ -f "$CONFIG_FILE" ]; then
+            echo -e "    ${GREEN}✓${NC} Done"
+        else
+            echo -e "    ${RED}✗${NC} Failed to save config"
+            rm -f "$CONFIG_FILE"
+            return 1
+        fi
     else
         echo -e "    ${RED}✗${NC} Failed"
         rm -f "$CONFIG_FILE"
@@ -154,7 +165,11 @@ case $choice in
             ((CURRENT++))
             PERCENT=$((CURRENT * 100 / TOTAL))
             echo -e "${BLUE}[$PERCENT%]${NC} [$CURRENT/$TOTAL] Downloading: $key"
-            IFS=':' read -r MODEL_NAME HF_PATH <<< "${VOICES[$key]}"
+            
+            # Parse the model name and path from associative array value
+            voice_data="${VOICES[$key]}"
+            MODEL_NAME="${voice_data%:*}"
+            HF_PATH="${voice_data#*:}"
             
             if ! download_model "$MODEL_NAME" "$HF_PATH"; then
                 ((FAILED++))
@@ -178,7 +193,9 @@ case $choice in
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -gt 0 ] && [ "$choice" -le ${#SORTED_KEYS[@]} ]; then
             idx=$((choice - 1))
             key="${SORTED_KEYS[$idx]}"
-            IFS=':' read -r MODEL_NAME HF_PATH <<< "${VOICES[$key]}"
+            voice_data="${VOICES[$key]}"
+            MODEL_NAME="${voice_data%:*}"
+            HF_PATH="${voice_data#*:}"
             echo ""
             download_model "$MODEL_NAME" "$HF_PATH"
         else
