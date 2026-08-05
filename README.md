@@ -17,12 +17,6 @@ A lightweight microservice for Text-to-Speech audio generation using Piper TTS. 
 
 ```
 ┌─────────────────────────────────┐
-│  Backend (Go)                   │
-│  /api/campaigns/upload-audio    │
-└────────────┬────────────────────┘
-             │ HTTP POST
-             ▼
-┌─────────────────────────────────┐
 │  Piper TTS Service (Python)     │
 │  Flask Microservice             │
 │  Port 5000                      │
@@ -63,24 +57,60 @@ bash setup.sh
 ```
 
 This will:
-- Verify Python 3.9 and FFmpeg are installed
+- Verify Python 3.9+ and FFmpeg are installed
 - Create virtual environment
 - Install dependencies
 - Create output directory
 
-### 3. Download Piper Models
+### 3. Download/Setup Piper Models
 
-Piper models need to be downloaded once. The models are downloaded to `/opt/piper-models/`:
+Models can be stored in different locations depending on your setup:
+
+**Option A: Development (Localhost) - Models in Your Home Directory**
 
 ```bash
-# Models will be auto-downloaded on first use, or manually:
-mkdir -p /opt/piper-models
-cd /opt/piper-models
+# Create Piper models directory
+mkdir -p ~/.local/share/piper
+cd ~/.local/share/piper
 
-# Download English US Male Medium model
+# Download voices you want to use
+# English US Male Medium (recommended for testing)
 wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/male/medium/en_US-male-medium.onnx
 wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/male/medium/en_US-male-medium.onnx.json
+
+# English US Female Medium (optional)
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/female/medium/en_US-female-medium.onnx
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/female/medium/en_US-female-medium.onnx.json
+
+# Spanish Male Medium (optional)
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/male/medium/es_ES-male-medium.onnx
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/male/medium/es_ES-male-medium.onnx.json
 ```
+
+**Option B: Production (VPS) - Models in /opt**
+
+```bash
+sudo mkdir -p /opt/piper-models
+cd /opt/piper-models
+
+# Download models
+sudo wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/male/medium/en_US-male-medium.onnx
+sudo wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/male/medium/en_US-male-medium.onnx.json
+
+# Set permissions
+sudo chown -R piper:piper /opt/piper-models
+sudo chmod 755 /opt/piper-models
+```
+
+### 4. Create .env File
+
+```bash
+cp .env.example .env
+```
+
+**For localhost development:** Models will be looked up in `~/.local/share/piper`
+
+**For production:** Update to `/opt/piper-models`
 
 ## Running
 
@@ -193,9 +223,17 @@ Check service health and model availability.
 
 **Endpoint:** `POST /api/tts/generate`
 
-Generate TTS audio from text.
+Generate TTS audio from text with voice selection.
 
-**Request:**
+**Request (NEW - Recommended):**
+```json
+{
+  "text": "Hello, this is a test message",
+  "voice": "en-US-male-medium"
+}
+```
+
+**Request (OLD - Still Supported for Backwards Compatibility):**
 ```json
 {
   "text": "Hello, this is a test message",
@@ -206,8 +244,9 @@ Generate TTS audio from text.
 
 **Parameters:**
 - `text` (required): Text to convert to speech (max 500 chars)
-- `language` (optional, default: "en-US"): Language code
-- `voice_gender` (optional, default: "male"): Voice gender ("male" or "female")
+- `voice` (new): Voice identifier - see "List Voices" endpoint for available options
+- `language` (legacy): Language code (e.g., "en-US", "es-ES") - auto-converted to voice
+- `voice_gender` (legacy): Voice gender ("male" or "female") - auto-converted to voice
 
 **Response (200 OK):**
 ```json
@@ -217,6 +256,7 @@ Generate TTS audio from text.
   "file_size": 9600,
   "file_path": "/tmp/piper-audio-output/550e8400-e29b-41d4-a716-446655440000_ulaw.wav",
   "local_url": "http://localhost:5000/api/audio/550e8400-e29b-41d4-a716-446655440000",
+  "voice": "en-US-male-medium",
   "status": "ready",
   "generated_at": "2026-08-05T15:30:00.000000"
 }
@@ -225,16 +265,66 @@ Generate TTS audio from text.
 **Response (400 Bad Request):**
 ```json
 {
-  "error": "text exceeds 500 characters",
-  "length": 512
+  "error": "Unknown voice: invalid-voice-id",
+  "available_voices": ["en-US-male-medium", "en-US-female-medium", ...],
+  "default_voice": "en-US-male-medium"
 }
 ```
 
-**Response (500 Server Error):**
+**Response (503 Service Unavailable):**
 ```json
 {
-  "error": "TTS generation failed",
-  "details": "Piper error message here"
+  "error": "Model files not found for voice: en-US-male-medium",
+  "expected_model": "/models/en_US-male-medium.onnx",
+  "expected_config": "/models/en_US-male-medium.onnx.json"
+}
+```
+
+---
+
+### 5. List Available Voices
+
+**Endpoint:** `GET /api/voices`
+
+Get all available voices and their status.
+
+**Response (200 OK):**
+```json
+{
+  "available_voices": {
+    "en-US-male-medium": {
+      "available": true,
+      "language": "English (US)",
+      "gender": "male",
+      "quality": "medium",
+      "model_name": "en_US-male-medium"
+    },
+    "en-US-female-medium": {
+      "available": false,
+      "language": "English (US)",
+      "gender": "female",
+      "quality": "medium",
+      "model_name": "en_US-female-medium"
+    },
+    "es-ES-male-medium": {
+      "available": true,
+      "language": "Spanish (ES)",
+      "gender": "male",
+      "quality": "medium",
+      "model_name": "es_ES-male-medium"
+    },
+    "fr-FR-female-medium": {
+      "available": true,
+      "language": "French (FR)",
+      "gender": "female",
+      "quality": "medium",
+      "model_name": "fr_FR-female-medium"
+    }
+  },
+  "default_voice": "en-US-male-medium",
+  "total_configured": 30,
+  "total_available": 15,
+  "timestamp": "2026-08-05T15:30:00.000000"
 }
 ```
 
