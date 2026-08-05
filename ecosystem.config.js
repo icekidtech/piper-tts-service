@@ -3,13 +3,14 @@ module.exports = {
     {
       name: 'piper-tts',
       script: 'app.py',
-      interpreter: 'python3',
+      interpreter: './venv/bin/python3',
       instances: 1,
       exec_mode: 'fork',
       
       // Environment variables
       env: {
-        PIPER_MODELS: '/opt/piper-models',
+        PIPER_MODELS_DIR: '/home/hustleloop-admin/.local/share/piper',
+        PIPER_OUTPUT_DIR: '/tmp/piper-audio-output',
         FLASK_ENV: 'production',
         FLASK_DEBUG: 0,
         PORT: 5000
