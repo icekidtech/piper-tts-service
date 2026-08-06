@@ -53,7 +53,7 @@ echo -e "${GREEN}✓ Python dependencies installed${NC}"
 
 # Verify piper is installed
 echo -e "${YELLOW}Verifying Piper installation...${NC}"
-python3 -c "import piper_phonemize; print('✓ Piper phonemize installed')" || {
+python3 -c "import piper; print('✓ Piper installed')" || {
     echo -e "${RED}✗ Piper not found in venv!${NC}"
     exit 1
 }
