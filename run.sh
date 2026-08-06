@@ -32,12 +32,12 @@ echo -e "${GREEN}✓ Virtual environment activated${NC}"
 
 # Verify piper is installed
 echo -e "${YELLOW}Verifying Piper installation...${NC}"
-if ! python3 -c "import piper_phonemizer" 2>/dev/null; then
+if ! python3 -c "import piper_phonemize" 2>/dev/null; then
     echo -e "${YELLOW}Installing Piper dependencies...${NC}"
     pip install --upgrade pip setuptools wheel
     pip install -r requirements.txt
 fi
-python3 -c "import piper_phonemizer; print('✓ Piper core installed')" || {
+python3 -c "import piper_phonemize; print('✓ Piper phonemize installed')" || {
     echo -e "${RED}✗ Piper installation failed!${NC}"
     exit 1
 }
