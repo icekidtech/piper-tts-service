@@ -73,19 +73,16 @@ fi
 
 echo ""
 
-# Stop existing PM2 process if running
+# Stop existing PM2 process if running (first time setup)
 if pm2 list | grep -q "piper-tts"; then
-    echo -e "${YELLOW}Stopping existing piper-tts process...${NC}"
-    pm2 stop piper-tts || true
-    pm2 delete piper-tts || true
+    echo -e "${YELLOW}Reloading existing piper-tts process (zero-downtime)...${NC}"
+    pm2 reload ecosystem.config.js
+    echo -e "${GREEN}✓ Piper TTS reloaded with PM2${NC}"
+else
+    echo -e "${YELLOW}Starting Piper TTS with PM2...${NC}"
+    pm2 start ecosystem.config.js
+    echo -e "${GREEN}✓ Piper TTS started with PM2${NC}"
 fi
-
-echo ""
-
-# Start with PM2
-echo -e "${YELLOW}Starting Piper TTS with PM2...${NC}"
-pm2 start ecosystem.config.js
-echo -e "${GREEN}✓ Piper TTS started with PM2${NC}"
 
 echo ""
 
