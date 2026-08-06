@@ -36,16 +36,48 @@ echo -e "${GREEN}✓ Log directory ready: /var/log/pm2${NC}"
 
 echo ""
 
-# Ensure venv exists
+# Ensure venv exists and activate it
 if [ ! -d "venv" ]; then
     echo -e "${YELLOW}Creating Python virtual environment...${NC}"
     python3 -m venv venv
-    source venv/bin/activate
-    pip install --upgrade pip
-    pip install -r requirements.txt
-    echo -e "${GREEN}✓ Virtual environment created${NC}"
+fi
+
+echo -e "${YELLOW}Activating virtual environment...${NC}"
+source venv/bin/activate
+
+# Upgrade pip and install requirements
+echo -e "${YELLOW}Installing/updating Python dependencies...${NC}"
+pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
+echo -e "${GREEN}✓ Python dependencies installed${NC}"
+
+# Verify piper is installed
+echo -e "${YELLOW}Verifying Piper installation...${NC}"
+python3 -c "import piper_phonemizer; print('✓ Piper core module found')" || {
+    echo -e "${RED}✗ Piper not found in venv!${NC}"
+    exit 1
+}
+echo -e "${GREEN}✓ Piper verified${NC}"
+
+echo ""
+
+# Check models directory
+MODELS_DIR="/home/hustleloop-admin/.local/share/piper"
+if [ ! -d "$MODELS_DIR" ]; then
+    echo -e "${YELLOW}⚠️  Piper models directory not found at $MODELS_DIR${NC}"
+    echo -e "${YELLOW}Please run ./download-voices.sh to download models${NC}"
 else
-    echo -e "${GREEN}✓ Virtual environment already exists${NC}"
+    VOICE_COUNT=$(ls "$MODELS_DIR"/*.onnx 2>/dev/null | wc -l)
+    echo -e "${GREEN}✓ Found $VOICE_COUNT voice models in $MODELS_DIR${NC}"
+fi
+
+echo ""
+
+# Stop existing PM2 process if running
+if pm2 list | grep -q "piper-tts"; then
+    echo -e "${YELLOW}Stopping existing piper-tts process...${NC}"
+    pm2 stop piper-tts || true
+    pm2 delete piper-tts || true
 fi
 
 echo ""
