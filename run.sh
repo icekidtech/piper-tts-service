@@ -30,6 +30,20 @@ fi
 source venv/bin/activate
 echo -e "${GREEN}✓ Virtual environment activated${NC}"
 
+# Verify piper is installed
+echo -e "${YELLOW}Verifying Piper installation...${NC}"
+if ! python3 -c "import piper_phonemizer" 2>/dev/null; then
+    echo -e "${YELLOW}Installing Piper dependencies...${NC}"
+    pip install --upgrade pip setuptools wheel
+    pip install -r requirements.txt
+fi
+python3 -c "import piper_phonemizer; print('✓ Piper core installed')" || {
+    echo -e "${RED}✗ Piper installation failed!${NC}"
+    exit 1
+}
+echo -e "${GREEN}✓ Piper verified${NC}"
+echo ""
+
 # Create output directory
 mkdir -p /tmp/piper-audio-output
 chmod 777 /tmp/piper-audio-output
