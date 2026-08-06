@@ -215,8 +215,15 @@ def generate_tts():
         
         # Step 1: Generate WAV using Piper
         logger.info(f"[{audio_id}] Generating WAV with Piper (voice={voice})...")
+        
+        # Use venv Python interpreter to ensure piper module is found
+        venv_python = '/home/hustleloop-admin/piper-tts-service/venv/bin/python3'
+        if not os.path.exists(venv_python):
+            # Fallback to system python3 if venv not found
+            venv_python = 'python3'
+        
         cmd = [
-            'python3', '-m', 'piper',
+            venv_python, '-m', 'piper',
             '--model', model_path,
             '--config', config_path,
             '--output-file', output_wav,

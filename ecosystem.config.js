@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'piper-tts',
       script: 'app.py',
-      interpreter: './venv/bin/python3',
+      interpreter: '/home/hustleloop-admin/piper-tts-service/venv/bin/python3',
       instances: 1,
       exec_mode: 'fork',
       
