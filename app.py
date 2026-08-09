@@ -400,10 +400,11 @@ def delete_audio(audio_id):
 
 @app.route('/api/audio/convert', methods=['POST'])
 def convert_audio():
-    """Convert uploaded audio to 8kHz mono WAV (Twilio compatible)
+    """Convert uploaded audio to 16kHz mono WAV (Twilio compatible, high quality)
     
     Accepts audio file in any format (MP3, M4A, OGG, etc.) and converts to
-    8kHz mono PCM WAV - the optimal format for Twilio voice playback.
+    16kHz mono PCM WAV - provides better audio quality than 8kHz while remaining
+    fully compatible with Twilio voice playback.
     
     This endpoint is used by the backend to convert user-uploaded pre-recorded
     audio for foreign number campaigns (non-Nigerian).
@@ -438,7 +439,7 @@ def convert_audio():
         ffmpeg_cmd = [
             'ffmpeg',
             '-i', temp_input,           # Input: any format
-            '-ar', '8000',              # Audio rate: 8kHz (Twilio standard)
+            '-ar', '16000',             # Audio rate: 16kHz (better quality than 8kHz, still Twilio compatible)
             '-ac', '1',                 # Audio channels: 1 (mono)
             '-acodec', 'pcm_s16le',     # Codec: PCM 16-bit (uncompressed, high quality)
             '-q:a', '9',                # Quality: 9 (good balance for voice)
