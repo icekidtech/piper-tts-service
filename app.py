@@ -438,7 +438,7 @@ def convert_audio():
         ffmpeg_cmd = [
             'ffmpeg',
             '-i', temp_input,           # Input: any format
-            '-ar', '8000',              # Audio rate: 8kHz (Twilio standard)
+            '-ar', '16000',             # Audio rate: 16kHz (better quality than 8kHz, still Twilio compatible)
             '-ac', '1',                 # Audio channels: 1 (mono)
             '-acodec', 'pcm_s16le',     # Codec: PCM 16-bit (uncompressed, high quality)
             '-q:a', '9',                # Quality: 9 (good balance for voice)
