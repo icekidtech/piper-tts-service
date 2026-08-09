@@ -398,6 +398,115 @@ def delete_audio(audio_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/audio/convert', methods=['POST'])
+def convert_audio():
+    """Convert uploaded audio to 8kHz mono WAV (Twilio compatible)
+    
+    Accepts audio file in any format (MP3, M4A, OGG, etc.) and converts to
+    8kHz mono PCM WAV - the optimal format for Twilio voice playback.
+    
+    This endpoint is used by the backend to convert user-uploaded pre-recorded
+    audio for foreign number campaigns (non-Nigerian).
+    """
+    try:
+        # Check if file is in request
+        if 'file' not in request.files:
+            return jsonify({"error": "file field is required"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "filename is required"}), 400
+        
+        # Generate unique audio ID
+        audio_id = str(uuid.uuid4())
+        
+        logger.info(f"[CONVERT:{audio_id}] Converting audio from: {file.filename}")
+        
+        # Save uploaded file to temp location
+        temp_input = os.path.join(OUTPUT_DIR, f"convert_input_{audio_id}.tmp")
+        file.save(temp_input)
+        
+        input_size = os.path.getsize(temp_input)
+        logger.info(f"[CONVERT:{audio_id}] Saved input file: {input_size} bytes")
+        
+        # Create output file path
+        output_file = os.path.join(OUTPUT_DIR, f"convert_output_{audio_id}.wav")
+        
+        # Convert with ffmpeg to 8kHz mono WAV (Twilio optimal format)
+        logger.info(f"[CONVERT:{audio_id}] Converting to 8kHz mono WAV...")
+        
+        ffmpeg_cmd = [
+            'ffmpeg',
+            '-i', temp_input,           # Input: any format
+            '-ar', '8000',              # Audio rate: 8kHz (Twilio standard)
+            '-ac', '1',                 # Audio channels: 1 (mono)
+            '-acodec', 'pcm_s16le',     # Codec: PCM 16-bit (uncompressed, high quality)
+            '-q:a', '9',                # Quality: 9 (good balance for voice)
+            '-y',                       # Overwrite output silently
+            output_file
+        ]
+        
+        try:
+            process = subprocess.Popen(
+                ffmpeg_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            
+            stdout, stderr = process.communicate(timeout=60)
+            
+            if process.returncode != 0:
+                error_msg = stderr.decode('utf-8', errors='ignore')
+                logger.error(f"[CONVERT:{audio_id}] FFmpeg failed: {error_msg}")
+                # Clean up temp files
+                if os.path.exists(temp_input):
+                    os.remove(temp_input)
+                return jsonify({
+                    "error": "Audio conversion failed",
+                    "details": error_msg
+                }), 500
+            
+            # Verify output file was created
+            if not os.path.exists(output_file):
+                logger.error(f"[CONVERT:{audio_id}] Output file not created")
+                if os.path.exists(temp_input):
+                    os.remove(temp_input)
+                return jsonify({"error": "Output file not created"}), 500
+            
+            output_size = os.path.getsize(output_file)
+            logger.info(f"[CONVERT:{audio_id}] Conversion complete: {output_size} bytes (8kHz mono WAV)")
+            
+            # Clean up input temp file (keep output for download)
+            if os.path.exists(temp_input):
+                os.remove(temp_input)
+            
+            # Return converted audio file directly
+            logger.info(f"[CONVERT:{audio_id}] Serving converted audio")
+            return send_file(
+                output_file,
+                mimetype='audio/wav',
+                as_attachment=True,
+                download_name=f"converted_{audio_id}.wav"
+            )
+        
+        except subprocess.TimeoutExpired:
+            logger.error(f"[CONVERT:{audio_id}] FFmpeg timeout")
+            process.kill()
+            if os.path.exists(temp_input):
+                os.remove(temp_input)
+            return jsonify({"error": "Conversion timeout"}), 504
+        
+        except Exception as e:
+            logger.error(f"[CONVERT:{audio_id}] Conversion error: {str(e)}")
+            if os.path.exists(temp_input):
+                os.remove(temp_input)
+            return jsonify({"error": f"Conversion error: {str(e)}"}), 500
+    
+    except Exception as e:
+        logger.error(f"Unexpected error in convert_audio: {str(e)}")
+        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
+
+
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """Get service statistics"""
@@ -438,6 +547,7 @@ if __name__ == '__main__':
     logger.info("  GET  /health - Health check")
     logger.info("  GET  /api/voices - List voices")
     logger.info("  POST /api/tts/generate - Generate TTS audio")
+    logger.info("  POST /api/audio/convert - Convert audio to 8kHz WAV (Twilio compatible)")
     logger.info("  GET  /api/audio/<id> - Download audio")
     logger.info("  GET  /api/stats - Service statistics")
     
